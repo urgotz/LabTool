@@ -161,9 +161,8 @@ class MainProgram(QWidget):
         z0 = self.ui.spinBox_z0.value()
         cnt = 0
         t = 0.0
-        # 这里为离散周期 故 不使用页面配置项
-        # delay = self.ui.spinBox_delay.value()/1000 # from ms to s
-        delay = 0.002 # unit:s
+       
+        delay = self.ui.spinBox_delay.value()/1000 # from ms to s
         while cnt < loop_cnt:
             dataset[0].append(self.ui.doubleSpinBox_roll_ap.value() * \
                                 math.sin(2*math.pi*self.ui.doubleSpinBox_roll_fr.value()*t \
