@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QFileDialog, QGraphic
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
 
+
 import sys
 import MainWindow
 import traceback
@@ -12,6 +13,8 @@ import socket
 import numpy as np
 import math
 import time
+
+from protocol_convert import *
 
 MIN_ANGLE = -30.0
 MAX_ANGLE = 30.0
@@ -22,8 +25,8 @@ MAX_DISP = 100.0
 
 
 # global s
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-target_addr = ('127.0.0.1', 9800)
+# s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# target_addr = ('127.0.0.1', 9800)
 class DataPool():
     def __init__(self):
         self.send_data_roll = 0
@@ -60,8 +63,12 @@ class MainProgram(QWidget):
         self.initUI()
         
         self.send_cont_motion_thrd = None
+
+        self.pc = ProtoConvt()
+
         MainProgram.show()
         sys.exit(app.exec_())
+
 
     def initSlider(self, slider, line_edit, init_value, min_value, max_value):
         len_of_slider = max_value - min_value
@@ -89,6 +96,7 @@ class MainProgram(QWidget):
         self.ui.pushButton_cont_motion_stop.clicked.connect(self.btn_cont_motion_stop_clicked)
         self.ui.pushButton_reset.clicked.connect(self.btn_reset_clicked)
 
+
     def btn_reset_clicked(self):
         self.init_all_sliders()
         self.btn_send_clicked()
@@ -107,12 +115,14 @@ class MainProgram(QWidget):
     def btn_send_clicked(self):
         try:
             self.data.refreshSendData(self.getAllSendData())
-            send_str = "@A6:" + str(self.data.send_data_roll) + ',' + str(self.data.send_data_pitch) + ',' \
-                    + str(self.data.send_data_yaw) + ',' + str(self.data.send_data_x) + ',' \
-                    + str(self.data.send_data_y) + ',' + str(self.data.send_data_z) + ',F0#'
-            print(send_str)
-            buff = bytes(send_str, encoding = "utf8")
-            s.sendto(buff, target_addr)
+            # send_str = "@A6:" + str(self.data.send_data_roll) + ',' + str(self.data.send_data_pitch) + ',' \
+            #         + str(self.data.send_data_yaw) + ',' + str(self.data.send_data_x) + ',' \
+            #         + str(self.data.send_data_y) + ',' + str(self.data.send_data_z) + ',F0#'
+            # print(send_str)
+            # buff = bytes(send_str, encoding = "utf8")
+            # s.sendto(buff, target_addr)
+            self.pc.send_location(self.data.send_data_x, self.data.send_data_y, self.data.send_data_z,\
+                                  self.data.send_data_roll, self.data.send_data_pitch, self.data.send_data_yaw)
 
         except Exception as e:
             traceback.print_exc()
@@ -130,7 +140,7 @@ class MainProgram(QWidget):
                                self.ui.checkBox_z_enable.isChecked() ]
             z0 = self.ui.spinBox_z0.value()
             if self.send_cont_motion_thrd == None or self.send_cont_motion_thrd.is_finished_:
-                self.send_cont_motion_thrd = ThreadSendContinuousMotion(dataset, delay, check_box_flags, z0)
+                self.send_cont_motion_thrd = ThreadSendContinuousMotion(dataset, delay, check_box_flags, z0, self.pc)
                 self.send_cont_motion_thrd.signal.connect(self.show_message_handle)
                 self.send_cont_motion_thrd.start()
 
@@ -151,7 +161,9 @@ class MainProgram(QWidget):
         z0 = self.ui.spinBox_z0.value()
         cnt = 0
         t = 0.0
-        delay = self.ui.spinBox_delay.value()/1000 # from ms to s
+        # 这里为离散周期 故 不使用页面配置项
+        # delay = self.ui.spinBox_delay.value()/1000 # from ms to s
+        delay = 0.002 # unit:s
         while cnt < loop_cnt:
             dataset[0].append(self.ui.doubleSpinBox_roll_ap.value() * \
                                 math.sin(2*math.pi*self.ui.doubleSpinBox_roll_fr.value()*t \
@@ -182,7 +194,7 @@ class MainProgram(QWidget):
 class ThreadSendContinuousMotion(QThread):
     signal = pyqtSignal(str)
 
-    def __init__(self, dataset, delay, check_box_flags, z0):
+    def __init__(self, dataset, delay, check_box_flags, z0, pc):
         super().__init__()
         self.dataset_ = dataset
         self.delay_ = delay
@@ -190,21 +202,30 @@ class ThreadSendContinuousMotion(QThread):
         self.z0_ = z0
         self.trigger_stop_ = False
         self.is_finished_ = True
+        self.pc = pc
 
     def run(self):
         self.is_finished_ = False
         for i in range(len(self.dataset_[0])):
-            send_str = ('@A6:%s,%s,%s,%s,%s,%s,F0#') \
-                        % (str(round(self.dataset_[0][i],2)) if self.check_box_flags_[0] else "0" , \
-                         str(round(self.dataset_[1][i],2)) if self.check_box_flags_[1] else "0" , \
-                         str(round(self.dataset_[2][i],2)) if self.check_box_flags_[2] else "0" , \
-                         str(round(self.dataset_[3][i],2)) if self.check_box_flags_[3] else "0" , \
-                         str(round(self.dataset_[4][i],2)) if self.check_box_flags_[4] else "0" , \
-                         str(round(self.dataset_[5][i],2)) if self.check_box_flags_[5] else str(self.z0_) \
-                        )
-            print(i,send_str)
-            buff = bytes(send_str, encoding = "utf8")
-            s.sendto(buff, target_addr)
+            # send_str = ('@A6:%s,%s,%s,%s,%s,%s,F0#') \
+            #             % (str(round(self.dataset_[0][i],2)) if self.check_box_flags_[0] else "0" , \
+            #              str(round(self.dataset_[1][i],2)) if self.check_box_flags_[1] else "0" , \
+            #              str(round(self.dataset_[2][i],2)) if self.check_box_flags_[2] else "0" , \
+            #              str(round(self.dataset_[3][i],2)) if self.check_box_flags_[3] else "0" , \
+            #              str(round(self.dataset_[4][i],2)) if self.check_box_flags_[4] else "0" , \
+            #              str(round(self.dataset_[5][i],2)) if self.check_box_flags_[5] else str(self.z0_) \
+            #             )
+            # print(i,send_str)
+            # buff = bytes(send_str, encoding = "utf8")
+            # s.sendto(buff, target_addr)
+            roll = round(self.dataset_[0][i],2) if self.check_box_flags_[0] else 0
+            yaw  = round(self.dataset_[1][i],2) if self.check_box_flags_[1] else 0
+            pitch= round(self.dataset_[2][i],2) if self.check_box_flags_[2] else 0
+            x    = round(self.dataset_[3][i],2) if self.check_box_flags_[3] else 0
+            y    = round(self.dataset_[4][i],2) if self.check_box_flags_[4] else 0
+            z    = round(self.dataset_[5][i],2) if self.check_box_flags_[5] else self.z0_
+            
+            self.pc.send_location(x,y,z,roll,pitch, yaw)
             if self.trigger_stop_:
                 break;
             time.sleep(self.delay_)

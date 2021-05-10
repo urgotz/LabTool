@@ -438,7 +438,7 @@ class Ui_MainWindow(object):
         self.spinBox_delay = QtWidgets.QSpinBox(self.verticalLayoutWidget)
         self.spinBox_delay.setMinimum(1)
         self.spinBox_delay.setMaximum(10000)
-        self.spinBox_delay.setProperty("value", 480)
+        self.spinBox_delay.setProperty("value", 50)
         self.spinBox_delay.setObjectName("spinBox_delay")
         self.horizontalLayout_23.addWidget(self.spinBox_delay)
         self.verticalLayout_6.addLayout(self.horizontalLayout_23)
