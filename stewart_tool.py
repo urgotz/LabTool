@@ -98,6 +98,10 @@ class MainProgram(QWidget):
 
 
     def btn_reset_clicked(self):
+        # send reset comand
+        self.pc.send_reset_cmd()
+        return
+        # abandon
         self.init_all_sliders()
         self.btn_send_clicked()
 
@@ -129,26 +133,59 @@ class MainProgram(QWidget):
 
     def btn_continuous_motion_clicked(self):
         try:
-            dataset = [[] for x in range(6)]
-            dataset = self.get_continuous_motion_dataset(self.ui.spinBox_loop_cnt.value())
-            delay = self.ui.spinBox_delay.value()/1000 # from ms to s
-            check_box_flags = [self.ui.checkBox_roll_enable.isChecked(), \
-                               self.ui.checkBox_yaw_enable.isChecked(), \
-                               self.ui.checkBox_pitch_enable.isChecked(), \
-                               self.ui.checkBox_x_enable.isChecked(), \
-                               self.ui.checkBox_y_enable.isChecked(), \
-                               self.ui.checkBox_z_enable.isChecked() ]
-            z0 = self.ui.spinBox_z0.value()
-            if self.send_cont_motion_thrd == None or self.send_cont_motion_thrd.is_finished_:
-                self.send_cont_motion_thrd = ThreadSendContinuousMotion(dataset, delay, check_box_flags, z0, self.pc)
-                self.send_cont_motion_thrd.signal.connect(self.show_message_handle)
-                self.send_cont_motion_thrd.start()
+            params = list()
+
+            params.append( FuncParams(self.ui.checkBox_x_enable.isChecked(), \
+                                      self.ui.doubleSpinBox_x_ap.value(), \
+                                      self.ui.doubleSpinBox_x_fr.value(), \
+                                      self.ui.doubleSpinBox_x_fai.value()/180*math.pi ) )
+            params.append( FuncParams(self.ui.checkBox_y_enable.isChecked(), \
+                                      self.ui.doubleSpinBox_y_ap.value(), \
+                                      self.ui.doubleSpinBox_y_fr.value(), \
+                                      self.ui.doubleSpinBox_y_fai.value()/180*math.pi ) )
+            params.append( FuncParams(self.ui.checkBox_z_enable.isChecked(), \
+                                      self.ui.doubleSpinBox_z_ap.value(), \
+                                      self.ui.doubleSpinBox_z_fr.value(), \
+                                      self.ui.doubleSpinBox_z_fai.value()/180*math.pi ) )
+            params.append( FuncParams(self.ui.checkBox_roll_enable.isChecked(), \
+                                      self.ui.doubleSpinBox_roll_ap.value()/180*math.pi , \
+                                      self.ui.doubleSpinBox_roll_fr.value(), \
+                                      self.ui.doubleSpinBox_roll_fai.value()/180*math.pi ) )
+            params.append( FuncParams(self.ui.checkBox_pitch_enable.isChecked(), \
+                                      self.ui.doubleSpinBox_pitch_ap.value()/180*math.pi , \
+                                      self.ui.doubleSpinBox_pitch_fr.value(), \
+                                      self.ui.doubleSpinBox_pitch_fai.value()/180*math.pi ) )
+            params.append( FuncParams(self.ui.checkBox_yaw_enable.isChecked(), \
+                                      self.ui.doubleSpinBox_yaw_ap.value()/180*math.pi , \
+                                      self.ui.doubleSpinBox_yaw_fr.value(), \
+                                      self.ui.doubleSpinBox_yaw_fai.value()/180*math.pi ) )
+            self.pc.send_func_params(params, self.ui.spinBox_loop_cnt.value())
+
+            ##### send dataset #####
+            # dataset = [[] for x in range(6)]
+            # dataset = self.get_continuous_motion_dataset(self.ui.spinBox_loop_cnt.value())
+            # delay = self.ui.spinBox_delay.value()/1000 # from ms to s
+            # check_box_flags = [self.ui.checkBox_roll_enable.isChecked(), \
+            #                    self.ui.checkBox_yaw_enable.isChecked(), \
+            #                    self.ui.checkBox_pitch_enable.isChecked(), \
+            #                    self.ui.checkBox_x_enable.isChecked(), \
+            #                    self.ui.checkBox_y_enable.isChecked(), \
+            #                    self.ui.checkBox_z_enable.isChecked() ]
+            # z0 = self.ui.spinBox_z0.value()
+            # if self.send_cont_motion_thrd == None or self.send_cont_motion_thrd.is_finished_:
+            #     self.send_cont_motion_thrd = ThreadSendContinuousMotion(dataset, delay, check_box_flags, z0, self.pc)
+            #     self.send_cont_motion_thrd.signal.connect(self.show_message_handle)
+            #     self.send_cont_motion_thrd.start()
 
         except Exception as e:
             traceback.print_exc()
 
     def btn_cont_motion_stop_clicked(self):
         try:
+            self.pc.send_stop_cmd()
+            
+            return
+            #### stop sending data thread ####  abandon
             self.send_cont_motion_thrd.stop()
 
         except Exception as e:
@@ -233,6 +270,15 @@ class ThreadSendContinuousMotion(QThread):
 
     def stop(self):
         self.trigger_stop_ = True
+
+class FuncParams():
+    def __init__(self, enable, ap, fr, pha):
+        self.enable = enable
+        self.ap = ap
+        self.fr = fr
+        self.pha = pha
+
+
 
 if __name__ == "__main__":
     MainProgram()
