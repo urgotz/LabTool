@@ -10,11 +10,14 @@ class ProtoConvt():
 		self.lead_ = 10 # 导程: 10mm
 		self.pul_per_cycle_ = 20000 # 每转脉冲数
 
+	def init_protocol(self):
 		self.s_ = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		self.s_.connect(('192.168.1.30', 8088))
+		self.s_.settimeout(3)
+		return self.s_.connect_ex(('192.168.1.30', 8088))
+
 
 	# 单位：mm和°
-	def send_location(self, x, y, z, roll, pitch, yaw):
+	def send_location(self, x, y, z, roll, pitch, yaw, vel = 1500):
 		print('send location:\nx:%f\ty:%f\tz:%f\troll:%f\tpitch:%f\tyaw:%f'%(x,y,z,roll,pitch, yaw) )
 
 		legs_extention = self.sm_.get_inv_solution(x, y, z, roll/180*3.14, pitch/180*3.14, yaw/180*3.14)
@@ -30,6 +33,7 @@ class ProtoConvt():
 		for i in range(6):
 			data += struct.pack('<L', pul_output[i])
 			print(hex(pul_output[i]))
+		data += struct.pack('<H', vel)
 		self.s_.send(data)
 		return
 
@@ -61,7 +65,7 @@ class ProtoConvt():
 		# print(hex(pul_output[0]))
 		# print(data)
 
-	def send_func_params(self, params, cnt):
+	def send_func_params(self, params, time, z0):
 		data = bytes()
 		data += struct.pack("<B", 0x02)  # send continous motion cmd
 		for i in range(6):
@@ -69,7 +73,8 @@ class ProtoConvt():
 			data += struct.pack('<f', params[i].ap)
 			data += struct.pack('<f', params[i].fr)
 			data += struct.pack('<f', params[i].pha)
-		data += struct.pack("<L", cnt)
+		data += struct.pack("<L", time*1000)
+		data += struct.pack("<L", z0)
 		self.s_.send(data)
 
 	def send_stop_cmd(self):

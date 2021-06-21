@@ -65,6 +65,20 @@ class MainProgram(QWidget):
         self.send_cont_motion_thrd = None
 
         self.pc = ProtoConvt()
+        if self.pc.init_protocol() != 0:
+            QMessageBox.critical(self, '错误', '网络连接失败！请检查硬件或IP配置')
+            exit()
+
+        self.menu = MainProgram.menuBar()   
+        self.menu_config = self.menu.addMenu('&配置') 
+
+        self.reset_platform = QAction('平台重置', self)
+        self.menu_config.addAction(self.reset_platform)
+        self.reset_platform.triggered.connect(self.reset_platform_func)
+
+        self.reconnect = QAction('网络重连', self)
+        self.menu_config.addAction(self.reconnect)
+        self.reconnect.triggered.connect(self.socket_reconnect_func)
 
         MainProgram.show()
         sys.exit(app.exec_())
@@ -98,12 +112,18 @@ class MainProgram(QWidget):
 
 
     def btn_reset_clicked(self):
-        # send reset comand
-        self.pc.send_reset_cmd()
-        return
-        # abandon
+        # move platform to middle position
+        tmp = self.ui.spinBox_leg_vel.value()
+        self.ui.spinBox_leg_vel.setValue(1000)
         self.init_all_sliders()
         self.btn_send_clicked()
+        self.ui.spinBox_leg_vel.setValue(tmp)
+
+    def reset_platform_func(self):
+        # send reset comand
+        self.pc.send_reset_cmd()
+    def socket_reconnect_func(self):
+        self.pc.init_protocol()
 
     def getAllSendData(self):
         data = list()
@@ -126,7 +146,8 @@ class MainProgram(QWidget):
             # buff = bytes(send_str, encoding = "utf8")
             # s.sendto(buff, target_addr)
             self.pc.send_location(self.data.send_data_x, self.data.send_data_y, self.data.send_data_z,\
-                                  self.data.send_data_roll, self.data.send_data_pitch, self.data.send_data_yaw)
+                                  self.data.send_data_roll, self.data.send_data_pitch, self.data.send_data_yaw,
+                                  self.ui.spinBox_leg_vel.value())
 
         except Exception as e:
             traceback.print_exc()
@@ -159,7 +180,8 @@ class MainProgram(QWidget):
                                       self.ui.doubleSpinBox_yaw_ap.value()/180*math.pi , \
                                       self.ui.doubleSpinBox_yaw_fr.value(), \
                                       self.ui.doubleSpinBox_yaw_fai.value()/180*math.pi ) )
-            self.pc.send_func_params(params, self.ui.spinBox_loop_cnt.value())
+            self.pc.send_func_params(params, self.ui.spinBox_loop_cnt.value(), self.ui.spinBox_z0.value())
+
 
             ##### send dataset #####
             # dataset = [[] for x in range(6)]

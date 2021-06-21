@@ -43,7 +43,7 @@ class StewartModel():
 		up_j6_radian = pi - up_j3_radian
 		up_joint6 = self.get_coordinates_from_radian(self.up_radius, up_j6_radian)
 		self.up_joints = np.array([up_joint1, up_joint2, up_joint3, up_joint4, up_joint5, up_joint6])
-		print('上平台铰点坐标:\n%s\n'% self.up_joints)
+		# print('上平台铰点坐标:\n%s\n'% self.up_joints)
 
 
 		# 下平台：
@@ -67,7 +67,7 @@ class StewartModel():
 		lp_j6_radian = pi - lp_j3_radian
 		lp_joint6 = self.get_coordinates_from_radian(self.lp_radius, lp_j6_radian)
 		self.lp_joints = np.array([lp_joint1, lp_joint2, lp_joint3, lp_joint4, lp_joint5, lp_joint6])
-		print('下平台铰点坐标:\n%s\n'% self.lp_joints)
+		# print('下平台铰点坐标:\n%s\n'% self.lp_joints)
 
 	def get_coordinates_from_radian(self, radius, degree):
 		return np.array([radius * np.cos(degree), radius * np.sin(degree), 0])
@@ -77,7 +77,7 @@ class StewartModel():
 		Ry = np.mat([[np.cos(ry), 0, np.sin(ry)], [0, 1, 0], [-np.sin(ry), 0, np.cos(ry)]])
 		Rz = np.mat([[np.cos(rz), -np.sin(rz), 0], [np.sin(rz), np.cos(rz), 0], [0, 0, 1]])
 		R = Rz * Ry * Rx
-		print("Rx=%s\nRy=%s\nRz=%s\nR=%s\n"%(Rx, Ry, Rz, R))	
+		# print("Rx=%s\nRy=%s\nRz=%s\nR=%s\n"%(Rx, Ry, Rz, R))	
 
 		return R
 
@@ -86,14 +86,14 @@ class StewartModel():
 		R = self.get_rotation_matrix(roll, pitch, yaw)
 		leg_lens = np.zeros(6)
 		for i in range(6):
-			print( p.reshape(3,1) + R * self.up_joints[i].reshape(3,1) - self.lp_joints[i].reshape(3,1))
+			# print( p.reshape(3,1) + R * self.up_joints[i].reshape(3,1) - self.lp_joints[i].reshape(3,1))
 			leg_lens[i] = np.linalg.norm( p.reshape(3,1) + R * self.up_joints[i].reshape(3,1) - self.lp_joints[i].reshape(3,1)) - self.ori_leg_lens[i]
 		# print(leg_lens)
 		return leg_lens
 
 	def calc_ori_leg_lens(self):
 		self.ori_leg_lens = self.get_inv_solution(0,0,0,0,0,0)
-		print(self.ori_leg_lens)
+		# print(self.ori_leg_lens)
 
 if __name__ == '__main__':
 	sm = StewartModel()
