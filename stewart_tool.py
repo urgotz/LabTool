@@ -63,6 +63,7 @@ class MainProgram(QWidget):
         self.initUI()
         
         self.send_cont_motion_thrd = None
+        self.req_data_thrd = None
 
         self.pc = ProtoConvt()
         if self.pc.init_protocol() != 0:
@@ -79,7 +80,7 @@ class MainProgram(QWidget):
         self.reconnect = QAction('网络重连', self)
         self.menu_config.addAction(self.reconnect)
         self.reconnect.triggered.connect(self.socket_reconnect_func)
-
+        self.start_req_data_thrd()
         MainProgram.show()
         sys.exit(app.exec_())
 
@@ -124,6 +125,12 @@ class MainProgram(QWidget):
         self.pc.send_reset_cmd()
     def socket_reconnect_func(self):
         self.pc.init_protocol()
+        self.start_req_data_thrd()
+
+    def start_req_data_thrd(self):
+        if self.req_data_thrd == None or self.req_data_thrd.is_finished_:
+            self.req_data_thrd = ThreadRefreshData(self.pc, self.ui)
+            self.req_data_thrd.start()
 
     def getAllSendData(self):
         data = list()
@@ -248,6 +255,35 @@ class MainProgram(QWidget):
 
     def show_message_handle(self, msg):
         QMessageBox.information(self, '提示', msg)
+
+
+class ThreadRefreshData(QThread):
+    def __init__(self, pc, ui):
+        super().__init__()
+        self.delay_ = 1
+        self.trigger_stop_ = False
+        self.is_finished_ = True
+        self.pc_ = pc
+        self.ui_ = ui
+
+
+    def run(self):
+        self.is_finished_ = False
+        while self.is_finished_ != True:
+            leglens = self.pc_.send_data_request()
+
+            print(leglens)
+            self.ui_.leglen_1.setText(str(round(leglens[0])))
+            self.ui_.leglen_2.setText(str(round(leglens[1])))
+            self.ui_.leglen_3.setText(str(round(leglens[2])))
+            self.ui_.leglen_4.setText(str(round(leglens[3])))
+            self.ui_.leglen_5.setText(str(round(leglens[4])))
+            self.ui_.leglen_6.setText(str(round(leglens[5])))
+            time.sleep(self.delay_)
+        self.is_finished_ = True
+
+    def stop(self):
+        self.is_finished_ = True
 
 class ThreadSendContinuousMotion(QThread):
     signal = pyqtSignal(str)

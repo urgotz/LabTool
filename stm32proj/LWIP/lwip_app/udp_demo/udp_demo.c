@@ -172,6 +172,8 @@ void udp_demo_recv(void *arg,struct udp_pcb *upcb,struct pbuf *p,struct ip_addr 
 		lwipdev.remoteip[1]=(upcb->remote_ip.addr>>8)&0xff; //IADDR3
 		lwipdev.remoteip[2]=(upcb->remote_ip.addr>>16)&0xff;//IADDR2
 		lwipdev.remoteip[3]=(upcb->remote_ip.addr>>24)&0xff;//IADDR1 
+		printf("Remote IP:%d.%d.%d.%d",lwipdev.remoteip[0],lwipdev.remoteip[1],lwipdev.remoteip[2],lwipdev.remoteip[3]);//服务器IP
+		printf("udp recv: %s\r\n", udp_demo_recvbuf);
 		udp_demo_flag|=1<<6;	//标记接收到数据了
 		pbuf_free(p);//释放内存
 	}else
@@ -188,6 +190,8 @@ void udp_demo_senddata(struct udp_pcb *upcb)
 	{
 		ptr->payload=(void*)tcp_demo_sendbuf; 
 		udp_send(upcb,ptr);	//udp发送数据 
+		//printf("send udp data:%s\r\n", tcp_demo_sendbuf);
+
 		pbuf_free(ptr);//释放内存
 	} 
 } 

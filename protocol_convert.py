@@ -9,6 +9,8 @@ class ProtoConvt():
 		self.sm_ = StewartModel()
 		self.lead_ = 10 # 导程: 10mm
 		self.pul_per_cycle_ = 20000 # 每转脉冲数
+		self.leglens_ = list()
+		self.leglen_ori_ = [0,0,0,0,0,0]
 
 	def init_protocol(self):
 		self.s_ = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -84,8 +86,22 @@ class ProtoConvt():
 
 	def send_reset_cmd(self):
 		data = bytes()
-		data += struct.pack("<B", 0x04) # send stop comand 
+		data += struct.pack("<B", 0x04) # send reset comand 
 		self.s_.send(data)
+
+	def send_data_request(self):
+		data = bytes()
+		data += struct.pack("<B", 0x05) # send reset comand 
+		self.s_.send(data)
+		recvdata = self.s_.recv(1024)
+		print(recvdata.hex('-'), len(recvdata), type(recvdata))
+		leglens = list()
+		for i in range(6):
+			leglens.append( struct.unpack('<i', bytearray(recvdata[4*i:4*i+4]))[0] )
+			leglens[i] -= self.leglen_ori_[i]
+			leglens[i] = leglens[i] / self.pul_per_cycle_ * self.lead_
+		
+		return leglens
 
 if __name__ == '__main__':
 	pc = ProtoConvt()

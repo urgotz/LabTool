@@ -38,11 +38,17 @@ const u8 *tcp_server_sendbuf="Explorer STM32F407 TCP Server send data\r\n";
 //bit5:0,没有客户端连接上;1,有客户端连接上了.
 //bit4~0:保留
 u8 tcp_server_flag;	 
+u8 rsp_tcp_flag;
 
-
-extern data_frame_t frame;
+extern data_frame_t frame, rsp_frm;
 extern u8 state;
+extern u8 rsp_data_send_flag;
 
+extern CanTxMsg TxMessage;
+extern CanRxMsg RxMessage;
+extern u8 mbox;
+extern u8 *can_recv_buf;
+extern u8 *tcp_rsp_buf;
 /////////////
  
 //TCP Server 测试
@@ -179,8 +185,8 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
 	// int index = 0;//added by wly
 	// int j = 0;//added by wly
 	struct pbuf *q;
-  	struct tcp_server_struct *es;
-	//struct tcp_server_struct *ret_es;
+	struct tcp_server_struct *es;
+//	struct tcp_server_struct *ret_es;
 	LWIP_ASSERT("arg != NULL",arg != NULL);
 	es=(struct tcp_server_struct *)arg;
 	if(p==NULL) //从客户端接收到空数据
@@ -259,41 +265,12 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
 				if ( cmd_type_tmp == 0x04) { // 平台复位
 					frame.cmd_type = cmd_type_tmp;
 				}
+				if ( cmd_type_tmp == 0x05) { // 请求下位机数据
+					frame.cmd_type = cmd_type_tmp;
+					rsp_tcp_flag = 1;
+				}
 			}
 			
-			//ret_es = (struct tcp_server_struct *) arg;
-			//if(ret_es->p)tcp_server_senddata(tpcb,ret_es);//发送数据
-			/*
-			for ( index = 0 ; index < 6; index ++) {
-				printf("fucking index:%d\r\n",index);
-				
-				TxMessage.StdId = 0x0601 + index;
-				
-				printf("fucking StdId:%d\r\n",TxMessage.StdId);
-				//TxMessage.ExtId = 0x03;
-				//TxMessage.IDE = CAN_ID_EXT;
-				//TxMessage.RTR = CAN_RTR_DATA;
-				
-				TxMessage.ExtId=0x12;	 // 设置扩展标示符（29位）
-				TxMessage.IDE=0;		  // 使用扩展标识符
-				TxMessage.RTR=0;		  // 消息类型为数据帧，一帧8位
-				
-				TxMessage.DLC = 8;
-				TxMessage.Data[7] = 0x05;
-				TxMessage.Data[6] = 0xdc;
-				TxMessage.Data[5] = tcp_server_recvbuf[3 + index*4];
-				TxMessage.Data[4] = tcp_server_recvbuf[2 + index*4];
-				TxMessage.Data[3] = tcp_server_recvbuf[1 + index*4];
-				TxMessage.Data[2] = tcp_server_recvbuf[0 + index*4];
-				TxMessage.Data[1] = 0x05;
-				TxMessage.Data[0] = 0x01;
-				for( j = 0; j <8 ; j ++) {
-					printf("0x%x ", TxMessage.Data[j]);
-				}
-				CAN_Transmit(CAN1, &TxMessage);  
-				//CAN1_Send_Msg(TxMessage.Data,8);
-			}
-			*/
 			tcp_server_flag|=1<<7;	//标记接收到数据了
 			lwipdev.remoteip[0]=tpcb->remote_ip.addr&0xff; 		//IADDR4
 			lwipdev.remoteip[1]=(tpcb->remote_ip.addr>>8)&0xff; //IADDR3
@@ -322,18 +299,61 @@ void tcp_server_error(void *arg,err_t err)
 //lwIP tcp_poll的回调函数
 err_t tcp_server_poll(void *arg, struct tcp_pcb *tpcb)
 {
+	int index; 
+	int i=0, j=0, cnt=0;
 	err_t ret_err;
 	struct tcp_server_struct *es; 
 	es=(struct tcp_server_struct *)arg; 
+
 	if(es!=NULL)
 	{
-		if(tcp_server_flag&(1<<7))	//判断是否有数据要发送
+		//if(tcp_server_flag&(1<<7))	//判断是否有数据要发送
+		if ( rsp_tcp_flag == 1)//判断是否有数据要发送
 		{
 			es->p=pbuf_alloc(PBUF_TRANSPORT,strlen((char*)tcp_server_sendbuf),PBUF_POOL);//申请内存
-			pbuf_take(es->p,(char*)tcp_server_sendbuf,strlen((char*)tcp_server_sendbuf));
+
+			for ( index = 0 ; index < 6; index ++) {
+				TxMessage.StdId = 0x0601 + index;
+				TxMessage.IDE=CAN_ID_STD;		  // 使用标准帧识符
+				TxMessage.RTR=CAN_RTR_DATA;		  // 消息类型为数据帧，一帧8位	
+				TxMessage.DLC = 8;
+				mymemset(&TxMessage.Data[0], 0, 8);
+				TxMessage.Data[1] = 0x05;
+				TxMessage.Data[0] = 0x00;	// 0x00:读取数据
+				/*
+				for( j = 0; j <8 ; j ++) {
+					printf("0x%x ", TxMessage.Data[j]);
+				}*/
+				mbox = CAN_Transmit(CAN1, &TxMessage);  
+				while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
+				if(i>=0XFFF){
+					printf("send data request timeout!\r\n");
+					i=0;
+					break;
+				}
+				
+				if ( CAN1_Receive_Msg(can_recv_buf) != 0 ) {
+					for (j = 0; j < 4; j++) {//读取四个字节的位置信息
+						tcp_rsp_buf[cnt+j] = can_recv_buf[2+j];
+					}
+					cnt += 4;
+				}
+				
+				//mymemset(tcp_rsp_buf, 0, 128);	// test
+				
+				mymemset(can_recv_buf, 0, 10);
+				//CAN1_Send_Msg(TxMessage.Data,8);
+				// delay_us(CAN_SEND_INT);
+				printf("len:%d\r\n", strlen((char*)tcp_rsp_buf));
+			}
+			printf("send data response: %s size:%d.\r\n", tcp_rsp_buf, strlen((char*)tcp_rsp_buf));
+			//pbuf_take(es->p,(char*)tcp_server_sendbuf,strlen((char*)tcp_server_sendbuf));
+			pbuf_take(es->p,(char*)tcp_rsp_buf,strlen((char*)tcp_rsp_buf));
+
 			tcp_server_senddata(tpcb,es); 		//轮询的时候发送要发送的数据
-			tcp_server_flag&=~(1<<7);  			//清除数据发送标志位
-			tcp_server_flag|=1<<6;
+			rsp_tcp_flag = 0;
+			//tcp_server_flag&=~(1<<7);  			//清除数据发送标志位
+			//tcp_server_flag|=1<<6;
 			if(es->p!=NULL)pbuf_free(es->p); 	//释放内存	
 		}else if(es->state==ES_TCPSERVER_CLOSING)//需要关闭连接?执行关闭操作
 		{

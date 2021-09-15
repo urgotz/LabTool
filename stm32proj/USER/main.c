@@ -21,6 +21,8 @@
 #include "math.h"
 #include "stewart_model.h"
 #include "common.h"
+//#include "udp_demo.h" 
+
 //ALIENTEK 探索者STM32F407开发板 实验55
 //LWIP网络通信综合实验-库函数版本
 //技术支持：www.openedv.com
@@ -64,13 +66,17 @@ void lwip_test_ui(u8 mode)
 	}
 }
 
-data_frame_t frame;
+data_frame_t frame, rsp_frm;
 u8 state; // 0: Idle 1: Busy
+u8 rsp_data_send_flag;
 //////////////
+
 CanTxMsg TxMessage;
 CanRxMsg RxMessage;
-
-
+u8 mbox;
+u8 *can_recv_buf;
+u8 *tcp_rsp_buf;
+// extern u8 udp_demo_flag;
 int main(void)
 {
 	NVIC_InitTypeDef NVIC_InitStructure; // added by wly
@@ -78,7 +84,11 @@ int main(void)
 	struct tcp_pcb *tcppcbnew;  	//定义一个TCP服务器控制块
 	struct tcp_pcb *tcppcbconn;  	//定义一个TCP服务器控制块
 
+//	struct udp_pcb *udppcb;  	//定义一个UDP服务器控制块
+//	struct ip_addr rmtipaddr;  	//远端ip地址
+
 	u8 res=0;		
+
 	
 	float pos[6] = {0, 0, 0, 0, 0, 0};
 	float legs[6] = {0,0,0,0,0,0};
@@ -91,6 +101,10 @@ int main(void)
 	u8 this_loop_has_delayed = 0;
 	u8 t=0;
 	//u8 key;
+	
+	rsp_data_send_flag = 1;
+	
+	
 	delay_init(168);       	//延时初始化
 	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);//设置系统中断优先级分组2
 	uart_init(115200);   	//串口波特率设置
@@ -108,7 +122,11 @@ int main(void)
 	mymem_init(SRAMEX);		//初始化外部内存池
 	mymem_init(SRAMCCM);	//初始化CCM内存池
 	POINT_COLOR = RED; 		//红色字体
-	
+	can_recv_buf=mymalloc(SRAMIN,10);	//申请内存
+	if(can_recv_buf==NULL)return 0;
+	tcp_rsp_buf=mymalloc(SRAMIN,128);	//申请内存
+	if(tcp_rsp_buf==NULL)return 0;
+	pbuf_alloc(PBUF_TRANSPORT,128,PBUF_POOL);
 	CAN1_Mode_Init(CAN_SJW_1tq,CAN_BS2_6tq,CAN_BS1_7tq,3,CAN_Mode_Normal);
 	
  // added by wly
@@ -155,12 +173,41 @@ int main(void)
 		}else res=1;  
 	}else res=1;
 	POINT_COLOR=BLUE;//蓝色字体
+
+//	// 创建udp
+//	udppcb=udp_new();
+//	if(udppcb)//创建成功
+//	{ 
+//		IP4_ADDR(&rmtipaddr,lwipdev.remoteip[0],lwipdev.remoteip[1],lwipdev.remoteip[2],lwipdev.remoteip[3]);
+//		printf("Remote IP:%d.%d.%d.%d",lwipdev.remoteip[0],lwipdev.remoteip[1],lwipdev.remoteip[2],lwipdev.remoteip[3]);//服务器IP
+
+//		err=udp_connect(udppcb,&rmtipaddr,UDP_DEMO_PORT);//UDP客户端连接到指定IP地址和端口号的服务器
+//		if(err==ERR_OK)
+//		{
+//			err=udp_bind(udppcb,IP_ADDR_ANY,UDP_DEMO_PORT);//绑定本地IP地址与端口号
+//			if(err==ERR_OK)	//绑定完成
+//			{
+//				printf("bind port succeed!\r\n");
+//				udp_recv(udppcb,udp_demo_recv,NULL);//注册接收回调函数 
+//			}else res=1;
+//		}else res=1;		
+//	}else res=1;
+	
+	
+	
 	while(res==0)
 	{
+//		// 发送udp报文
+//		udp_demo_senddata(udppcb);
+//		if(udp_demo_flag&1<<6)//是否收到数据?
+//		{
+//			udp_demo_flag&=~(1<<6);//标记数据已经被处理了.
+//		} 
 		if ( state == 0 ) {
 			time = 0;
 			total_cnt = 0;
-			
+
+
 			if( frame.cmd_type == 0x01 ){ // 单点发送
 				for ( index = 0 ; index < 6; index ++) {
 					TxMessage.StdId = 0x0601 + index;
@@ -279,6 +326,9 @@ int main(void)
 	tcp_server_connection_close(tcppcbnew,0);//关闭TCP Server连接
 	tcp_server_connection_close(tcppcbconn,0);//关闭TCP Server连接 
 	tcp_server_remove_timewait(); 
+	// udp_demo_connection_close(udppcb); 
 	mymemset(tcppcbnew,0,sizeof(struct tcp_pcb));
 	mymemset(tcppcbconn,0,sizeof(struct tcp_pcb)); 
+	myfree(SRAMIN,can_recv_buf); 
+	myfree(SRAMIN,tcp_rsp_buf); 
 } 
