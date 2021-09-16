@@ -10,7 +10,19 @@ class ProtoConvt():
 		self.lead_ = 10 # 导程: 10mm
 		self.pul_per_cycle_ = 20000 # 每转脉冲数
 		self.leglens_ = list()
-		self.leglen_ori_ = [0,0,0,0,0,0]
+##		self.leglen_ori_ = [int('0xfffd50d0',16),
+##                                    int('0xffffbc16',16),
+##                                    int('0xfffe7dfc',16),
+##                                    int('0xfffd4ff0',16),
+##                                    int('0xffffbbcc',16),
+##                                    int('0xfffe7d04',16)]
+		self.leglen_ori_ = [int('0xfffaa7aa',16),
+                                    int('0xfffd12b9',16),
+                                    int('0xfffbd4f7',16),
+                                    int('0xfffaa6bb',16),
+                                    int('0xfffd1267',16),
+                                    int('0xfffbd3d1',16)]
+		print(self.leglen_ori_)
 
 	def init_protocol(self):
 		self.s_ = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -96,9 +108,16 @@ class ProtoConvt():
 		recvdata = self.s_.recv(1024)
 		print(recvdata.hex('-'), len(recvdata), type(recvdata))
 		leglens = list()
+		legoffset = [0, 469762047,3841900261,3841822889,3841981525,402570687]
 		for i in range(6):
-			leglens.append( struct.unpack('<i', bytearray(recvdata[4*i:4*i+4]))[0] )
+			print(bytearray(recvdata[4*i:4*i+4]))
+			leglens.append( struct.unpack('<I', bytearray(recvdata[4*i:4*i+4]))[0] )
+			print(leglens[i])
 			leglens[i] -= self.leglen_ori_[i]
+			print(leglens[i])
+			if leglens[i] < 0:
+                                leglens[i] += legoffset[i]
+			print(leglens[i])
 			leglens[i] = leglens[i] / self.pul_per_cycle_ * self.lead_
 		
 		return leglens

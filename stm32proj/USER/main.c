@@ -94,7 +94,7 @@ int main(void)
 	float legs[6] = {0,0,0,0,0,0};
 	u32 data[6] = {0,0,0,0,0,0};
 	int index; 
-	int i;
+	int i,j,cnt;
 	float time = 0;
 	int total_cnt = 0;
 	u8 init_flag = 0;
@@ -226,8 +226,33 @@ int main(void)
 					for( j = 0; j <8 ; j ++) {
 						printf("0x%x ", TxMessage.Data[j]);
 					}*/
-					CAN_Transmit(CAN1, &TxMessage);  
-					//CAN1_Send_Msg(TxMessage.Data,8);
+					//CAN_Transmit(CAN1, &TxMessage);  
+					//rsp test
+					mbox = CAN_Transmit(CAN1, &TxMessage);  
+					while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
+					if(i>=0XFFF){
+						printf("send data request timeout!\r\n");
+						i=0;
+						break;
+					}
+					do {
+						if( CAN_MessagePending(CAN1,CAN_FIFO0)==0) continue;		//没有接收到数据,直接退出 
+						CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);//读取数据	
+					}while(RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05);
+					cnt = 0;
+					if (RxMessage.DLC != 0 && RxMessage.StdId == 0x0581 + index && (RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05)){
+						printf("leg[%d]: ", index);
+						for( j = 0; j <8 ; j ++) {
+								printf("0x%x ", TxMessage.Data[j]);
+						}
+						printf("\r\n");
+						for (j = 0; j < 4; j++) {//读取四个字节的位置信息
+							tcp_rsp_buf[cnt+j] = RxMessage.Data[2+j];
+						}
+						cnt += 4;
+					}
+					mymemset(&RxMessage.Data[0], 0, 8);
+					//rsp test end
 					delay_us(CAN_SEND_INT);
 					this_loop_has_delayed = 1;
 				}
@@ -269,7 +294,36 @@ int main(void)
 				mymemcpy(&TxMessage.Data[2], &data[i], 4);
 				TxMessage.Data[1] = 0x05;
 				TxMessage.Data[0] = 0x01;
-				CAN_Transmit(CAN1, &TxMessage);
+				
+				//CAN_Transmit(CAN1, &TxMessage);
+				
+				//rsp test
+				mbox = CAN_Transmit(CAN1, &TxMessage);  
+				while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
+				if(i>=0XFFF){
+					printf("send data request timeout!\r\n");
+					i=0;
+					break;
+				}
+				do {
+					if( CAN_MessagePending(CAN1,CAN_FIFO0)==0) continue;		//没有接收到数据,直接退出 
+					CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);//读取数据	
+				}while(RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05);
+				cnt = 0;
+				if (RxMessage.DLC != 0 && RxMessage.StdId == 0x0581 + index && (RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05)){
+					printf("leg[%d]: ", index);
+					for( j = 0; j <8 ; j ++) {
+							printf("0x%x ", TxMessage.Data[j]);
+					}
+					printf("\r\n");
+					for (j = 0; j < 4; j++) {//读取四个字节的位置信息
+						tcp_rsp_buf[cnt+j] = RxMessage.Data[2+j];
+					}
+					cnt += 4;
+				}
+				mymemset(&RxMessage.Data[0], 0, 8);
+				//rsp test end
+				
 				delay_us(CAN_SEND_INT);
 				this_loop_has_delayed = 1;
 				// printf("leg[%d]:%f, data[%d]:%d\r\n", i, legs[i], i, data[i]);
@@ -308,6 +362,41 @@ int main(void)
 			if (!init_flag) {
 				init_flag = 1;
 			}
+		}
+		if ( state == 0 && frame.cmd_type == 0x00) { //无指令下发时，自动轮询请求下位机参数
+			for ( index = 0 ; index < 6; index ++) {
+					TxMessage.StdId = 0x0601 + index;
+					TxMessage.IDE=CAN_ID_STD;		  // 使用标准帧识符
+					TxMessage.RTR=CAN_RTR_DATA;		  // 消息类型为数据帧，一帧8位	
+					TxMessage.DLC = 8;
+					mymemset(&TxMessage.Data[0], 0, 8);
+					TxMessage.Data[1] = 0x15; //查询位置信息
+					TxMessage.Data[0] = 0x00;	// 0x00:读取数据
+					mbox = CAN_Transmit(CAN1, &TxMessage);  
+					while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
+					if(i>=0XFFF){
+						printf("send data request timeout!\r\n");
+						i=0;
+						break;
+					}
+					do {
+						if( CAN_MessagePending(CAN1,CAN_FIFO0)==0) continue;		//没有接收到数据,直接退出 
+						CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);//读取数据	
+					}while(RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05);
+					cnt = 0;
+					if (RxMessage.DLC != 0 && RxMessage.StdId == 0x0581 + index && (RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05)){
+						printf("leg[%d]: ", index);
+						for( j = 0; j <8 ; j ++) {
+								printf("0x%x ", TxMessage.Data[j]);
+						}
+						printf("\r\n");
+						for (j = 0; j < 4; j++) {//读取四个字节的位置信息
+							tcp_rsp_buf[cnt+j] = RxMessage.Data[2+j];
+						}
+						cnt += 4;
+					}
+					mymemset(&RxMessage.Data[0], 0, 8);
+				}
 		}
 		lwip_periodic_handle();
 		if (this_loop_has_delayed == 0 ) {

@@ -299,8 +299,10 @@ void tcp_server_error(void *arg,err_t err)
 //lwIP tcp_poll的回调函数
 err_t tcp_server_poll(void *arg, struct tcp_pcb *tpcb)
 {
-	int index; 
-	int i=0, j=0, cnt=0;
+//	int index; 				
+//	CanRxMsg RxMessage;
+//	int i=0, j=0, cnt=0;
+	int j = 0;
 	err_t ret_err;
 	struct tcp_server_struct *es; 
 	es=(struct tcp_server_struct *)arg; 
@@ -311,42 +313,11 @@ err_t tcp_server_poll(void *arg, struct tcp_pcb *tpcb)
 		if ( rsp_tcp_flag == 1)//判断是否有数据要发送
 		{
 			es->p=pbuf_alloc(PBUF_TRANSPORT,strlen((char*)tcp_server_sendbuf),PBUF_POOL);//申请内存
-
-			for ( index = 0 ; index < 6; index ++) {
-				TxMessage.StdId = 0x0601 + index;
-				TxMessage.IDE=CAN_ID_STD;		  // 使用标准帧识符
-				TxMessage.RTR=CAN_RTR_DATA;		  // 消息类型为数据帧，一帧8位	
-				TxMessage.DLC = 8;
-				mymemset(&TxMessage.Data[0], 0, 8);
-				TxMessage.Data[1] = 0x05;
-				TxMessage.Data[0] = 0x00;	// 0x00:读取数据
-				/*
-				for( j = 0; j <8 ; j ++) {
-					printf("0x%x ", TxMessage.Data[j]);
-				}*/
-				mbox = CAN_Transmit(CAN1, &TxMessage);  
-				while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
-				if(i>=0XFFF){
-					printf("send data request timeout!\r\n");
-					i=0;
-					break;
-				}
-				
-				if ( CAN1_Receive_Msg(can_recv_buf) != 0 ) {
-					for (j = 0; j < 4; j++) {//读取四个字节的位置信息
-						tcp_rsp_buf[cnt+j] = can_recv_buf[2+j];
-					}
-					cnt += 4;
-				}
-				
-				//mymemset(tcp_rsp_buf, 0, 128);	// test
-				
-				mymemset(can_recv_buf, 0, 10);
-				//CAN1_Send_Msg(TxMessage.Data,8);
-				// delay_us(CAN_SEND_INT);
-				printf("len:%d\r\n", strlen((char*)tcp_rsp_buf));
-			}
-			printf("send data response: %s size:%d.\r\n", tcp_rsp_buf, strlen((char*)tcp_rsp_buf));
+			printf("send data: \r\n");
+			for(j=0; j<strlen((char*)tcp_rsp_buf);j++){
+				printf("0x%x,",tcp_rsp_buf[j]);
+			}printf("\r\n");
+			//printf("send data response: %s size:%d.\r\n", tcp_rsp_buf, strlen((char*)tcp_rsp_buf));
 			//pbuf_take(es->p,(char*)tcp_server_sendbuf,strlen((char*)tcp_server_sendbuf));
 			pbuf_take(es->p,(char*)tcp_rsp_buf,strlen((char*)tcp_rsp_buf));
 
