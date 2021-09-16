@@ -49,6 +49,7 @@ extern CanRxMsg RxMessage;
 extern u8 mbox;
 extern u8 *can_recv_buf;
 extern u8 *tcp_rsp_buf;
+extern u8 *ori_pos_buf;
 /////////////
  
 //TCP Server 测试
@@ -265,11 +266,41 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
 				if ( cmd_type_tmp == 0x04) { // 平台复位
 					frame.cmd_type = cmd_type_tmp;
 				}
-				if ( cmd_type_tmp == 0x05) { // 请求下位机数据
-					frame.cmd_type = cmd_type_tmp;
-					rsp_tcp_flag = 1;
-				}
 			}
+				if ( cmd_type_tmp == 0x05) { // 请求下位机数据
+					//frame.cmd_type = cmd_type_tmp;
+					es->p=pbuf_alloc(PBUF_TRANSPORT,24,PBUF_POOL);//申请内存
+//					printf("send data: \r\n");
+//					for(j=0; j<strlen((char*)tcp_rsp_buf);j++){
+//						printf("0x%x,",tcp_rsp_buf[j]);
+//					}printf("\r\n");
+//					printf("[tcp]send data response: %s size:%d.\r\n", tcp_rsp_buf, 24);
+					//pbuf_take(es->p,(char*)tcp_server_sendbuf,strlen((char*)tcp_server_sendbuf));
+					pbuf_take(es->p,(char*)tcp_rsp_buf,24);
+					
+					tcp_server_senddata(tpcb,es); 		//轮询的时候发送要发送的数据
+					//tcp_server_flag&=~(1<<7);  			//清除数据发送标志位
+					//tcp_server_flag|=1<<6;
+					if(es->p!=NULL)pbuf_free(es->p); 	//释放内存	
+				}
+				if ( cmd_type_tmp == 0x06) { // 请求下位机数据
+					//frame.cmd_type = cmd_type_tmp;
+					int j;
+					es->p=pbuf_alloc(PBUF_TRANSPORT,24,PBUF_POOL);//申请内存
+					printf("ori leg data: \r\n");
+					for(j=0; j<24;j++){
+						printf("0x%x,",ori_pos_buf[j]);
+					}printf("\r\n");
+					//printf("send data response: %s size:%d.\r\n", tcp_rsp_buf, strlen((char*)tcp_rsp_buf));
+					//pbuf_take(es->p,(char*)tcp_server_sendbuf,strlen((char*)tcp_server_sendbuf));
+					pbuf_take(es->p,(char*)ori_pos_buf,24);
+
+					tcp_server_senddata(tpcb,es); 		//轮询的时候发送要发送的数据
+					//tcp_server_flag&=~(1<<7);  			//清除数据发送标志位
+					//tcp_server_flag|=1<<6;
+					if(es->p!=NULL)pbuf_free(es->p); 	//释放内存	
+				}
+			
 			
 			tcp_server_flag|=1<<7;	//标记接收到数据了
 			lwipdev.remoteip[0]=tpcb->remote_ip.addr&0xff; 		//IADDR4
@@ -312,20 +343,7 @@ err_t tcp_server_poll(void *arg, struct tcp_pcb *tpcb)
 		//if(tcp_server_flag&(1<<7))	//判断是否有数据要发送
 		if ( rsp_tcp_flag == 1)//判断是否有数据要发送
 		{
-			es->p=pbuf_alloc(PBUF_TRANSPORT,strlen((char*)tcp_server_sendbuf),PBUF_POOL);//申请内存
-			printf("send data: \r\n");
-			for(j=0; j<strlen((char*)tcp_rsp_buf);j++){
-				printf("0x%x,",tcp_rsp_buf[j]);
-			}printf("\r\n");
-			//printf("send data response: %s size:%d.\r\n", tcp_rsp_buf, strlen((char*)tcp_rsp_buf));
-			//pbuf_take(es->p,(char*)tcp_server_sendbuf,strlen((char*)tcp_server_sendbuf));
-			pbuf_take(es->p,(char*)tcp_rsp_buf,strlen((char*)tcp_rsp_buf));
-
-			tcp_server_senddata(tpcb,es); 		//轮询的时候发送要发送的数据
-			rsp_tcp_flag = 0;
-			//tcp_server_flag&=~(1<<7);  			//清除数据发送标志位
-			//tcp_server_flag|=1<<6;
-			if(es->p!=NULL)pbuf_free(es->p); 	//释放内存	
+			
 		}else if(es->state==ES_TCPSERVER_CLOSING)//需要关闭连接?执行关闭操作
 		{
 			tcp_server_connection_close(tpcb,es);//关闭连接

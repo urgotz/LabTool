@@ -76,7 +76,36 @@ CanRxMsg RxMessage;
 u8 mbox;
 u8 *can_recv_buf;
 u8 *tcp_rsp_buf;
+u8 *ori_pos_buf;
 // extern u8 udp_demo_flag;
+void refresh_pos_data_from_can_recv(){
+	int tmp,j;
+	tmp = CAN_MessagePending(CAN1,CAN_FIFO0);
+	if ( tmp > 0 ) {
+//		printf("pending num:%d\r\n", tmp);
+		CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);//读取数据	
+//		printf("data[%d]: ", RxMessage.StdId - 0x580);
+//		for( j = 0; j <8 ; j ++) {
+//				printf("0x%x ", RxMessage.Data[j]);
+//		}
+//		printf("\r\n");
+
+		if (RxMessage.DLC != 0 && (RxMessage.Data[1] == 0x15||RxMessage.Data[1] == 0x05)){
+//			printf("leg[%d]: ", RxMessage.StdId - 0x580);
+//			for( j = 0; j <8 ; j ++) {
+//					printf("0x%x ", RxMessage.Data[j]);
+//			}
+//			printf("\r\n");
+			for (j = 0; j < 4; j++) {//读取四个字节的位置信息
+//				printf("data:%x,",tcp_rsp_buf[(RxMessage.StdId - 0x581) *4+j]);
+				tcp_rsp_buf[(RxMessage.StdId - 0x581) *4+j] = RxMessage.Data[2+j];
+//				printf("data after:%x,",tcp_rsp_buf[(RxMessage.StdId - 0x581) *4+j]);
+			}
+		}
+//		printf("[main]send data response: %s size:%d.\r\n", tcp_rsp_buf, strlen((char*)tcp_rsp_buf));
+		mymemset(&RxMessage.Data[0], 0, 8);
+	}
+}
 int main(void)
 {
 	NVIC_InitTypeDef NVIC_InitStructure; // added by wly
@@ -94,12 +123,14 @@ int main(void)
 	float legs[6] = {0,0,0,0,0,0};
 	u32 data[6] = {0,0,0,0,0,0};
 	int index; 
-	int i,j,cnt;
+	int i;
 	float time = 0;
 	int total_cnt = 0;
 	u8 init_flag = 0;
 	u8 this_loop_has_delayed = 0;
 	u8 t=0;
+	u8 rsp_time_cnt=0;
+	u8 ori_pos_stable_cnt=0;
 	//u8 key;
 	
 	rsp_data_send_flag = 1;
@@ -125,7 +156,9 @@ int main(void)
 	can_recv_buf=mymalloc(SRAMIN,10);	//申请内存
 	if(can_recv_buf==NULL)return 0;
 	tcp_rsp_buf=mymalloc(SRAMIN,128);	//申请内存
+	ori_pos_buf=mymalloc(SRAMIN,128);	//申请内存
 	if(tcp_rsp_buf==NULL)return 0;
+	if(ori_pos_buf==NULL)return 0;
 	pbuf_alloc(PBUF_TRANSPORT,128,PBUF_POOL);
 	CAN1_Mode_Init(CAN_SJW_1tq,CAN_BS2_6tq,CAN_BS1_7tq,3,CAN_Mode_Normal);
 	
@@ -226,36 +259,13 @@ int main(void)
 					for( j = 0; j <8 ; j ++) {
 						printf("0x%x ", TxMessage.Data[j]);
 					}*/
-					//CAN_Transmit(CAN1, &TxMessage);  
-					//rsp test
-					mbox = CAN_Transmit(CAN1, &TxMessage);  
-					while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
-					if(i>=0XFFF){
-						printf("send data request timeout!\r\n");
-						i=0;
-						break;
-					}
-					do {
-						if( CAN_MessagePending(CAN1,CAN_FIFO0)==0) continue;		//没有接收到数据,直接退出 
-						CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);//读取数据	
-					}while(RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05);
-					cnt = 0;
-					if (RxMessage.DLC != 0 && RxMessage.StdId == 0x0581 + index && (RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05)){
-						printf("leg[%d]: ", index);
-						for( j = 0; j <8 ; j ++) {
-								printf("0x%x ", TxMessage.Data[j]);
-						}
-						printf("\r\n");
-						for (j = 0; j < 4; j++) {//读取四个字节的位置信息
-							tcp_rsp_buf[cnt+j] = RxMessage.Data[2+j];
-						}
-						cnt += 4;
-					}
-					mymemset(&RxMessage.Data[0], 0, 8);
-					//rsp test end
+					CAN_Transmit(CAN1, &TxMessage);  
+					
 					delay_us(CAN_SEND_INT);
+					refresh_pos_data_from_can_recv();
 					this_loop_has_delayed = 1;
 				}
+				state = 0;
 				frame.cmd_type = 0x00;
 			} 
 			if ( frame.cmd_type == 0x02 ) { // 连续发送
@@ -267,7 +277,7 @@ int main(void)
 				this_loop_has_delayed = 0;
 			}
 		}
-		if ( state == 1 ) {
+		if ( state == 1 ) {// 连续发送
 			for ( i = 0; i < 6; i ++) {
 				if ( frame.params[i].enable ) {
 					pos[i] = frame.params[i].ap * sin ( 2 * PI * frame.params[i].fr * time + frame.params[i].pha);
@@ -295,36 +305,14 @@ int main(void)
 				TxMessage.Data[1] = 0x05;
 				TxMessage.Data[0] = 0x01;
 				
-				//CAN_Transmit(CAN1, &TxMessage);
+				CAN_Transmit(CAN1, &TxMessage);
 				
-				//rsp test
-				mbox = CAN_Transmit(CAN1, &TxMessage);  
-				while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
-				if(i>=0XFFF){
-					printf("send data request timeout!\r\n");
-					i=0;
-					break;
-				}
-				do {
-					if( CAN_MessagePending(CAN1,CAN_FIFO0)==0) continue;		//没有接收到数据,直接退出 
-					CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);//读取数据	
-				}while(RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05);
-				cnt = 0;
-				if (RxMessage.DLC != 0 && RxMessage.StdId == 0x0581 + index && (RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05)){
-					printf("leg[%d]: ", index);
-					for( j = 0; j <8 ; j ++) {
-							printf("0x%x ", TxMessage.Data[j]);
-					}
-					printf("\r\n");
-					for (j = 0; j < 4; j++) {//读取四个字节的位置信息
-						tcp_rsp_buf[cnt+j] = RxMessage.Data[2+j];
-					}
-					cnt += 4;
-				}
-				mymemset(&RxMessage.Data[0], 0, 8);
-				//rsp test end
+				
 				
 				delay_us(CAN_SEND_INT);
+				if (total_cnt%50 == 0){
+					refresh_pos_data_from_can_recv();
+				}
 				this_loop_has_delayed = 1;
 				// printf("leg[%d]:%f, data[%d]:%d\r\n", i, legs[i], i, data[i]);
 			}
@@ -339,6 +327,7 @@ int main(void)
 				total_cnt = 0;
 			}
 			total_cnt ++;
+			lwip_periodic_handle();
 			//delay_ms(SEND_INTERVAL);
 		}
 		if ( (state == 2 && frame.cmd_type == 0x04 ) || init_flag == 0) { // 平台复位 
@@ -356,48 +345,51 @@ int main(void)
 				delay_us(CAN_SEND_INT);
 				this_loop_has_delayed = 1;
 			}
-			delay_ms(3000);
+			delay_ms(5000);
 			frame.cmd_type = 0x00;
 			state = 0;
 			if (!init_flag) {
 				init_flag = 1;
 			}
 		}
-		if ( state == 0 && frame.cmd_type == 0x00) { //无指令下发时，自动轮询请求下位机参数
+		rsp_time_cnt++;
+		if ( state == 0 && frame.cmd_type == 0x00 && rsp_time_cnt ==200) { //无指令下发时，自动轮询请求下位机参数
+			rsp_time_cnt = 0;
 			for ( index = 0 ; index < 6; index ++) {
-					TxMessage.StdId = 0x0601 + index;
-					TxMessage.IDE=CAN_ID_STD;		  // 使用标准帧识符
-					TxMessage.RTR=CAN_RTR_DATA;		  // 消息类型为数据帧，一帧8位	
-					TxMessage.DLC = 8;
-					mymemset(&TxMessage.Data[0], 0, 8);
-					TxMessage.Data[1] = 0x15; //查询位置信息
-					TxMessage.Data[0] = 0x00;	// 0x00:读取数据
-					mbox = CAN_Transmit(CAN1, &TxMessage);  
-					while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
-					if(i>=0XFFF){
-						printf("send data request timeout!\r\n");
-						i=0;
-						break;
-					}
-					do {
-						if( CAN_MessagePending(CAN1,CAN_FIFO0)==0) continue;		//没有接收到数据,直接退出 
-						CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);//读取数据	
-					}while(RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05);
-					cnt = 0;
-					if (RxMessage.DLC != 0 && RxMessage.StdId == 0x0581 + index && (RxMessage.Data[1] != 0x15||RxMessage.Data[1] != 0x05)){
-						printf("leg[%d]: ", index);
-						for( j = 0; j <8 ; j ++) {
-								printf("0x%x ", TxMessage.Data[j]);
-						}
-						printf("\r\n");
-						for (j = 0; j < 4; j++) {//读取四个字节的位置信息
-							tcp_rsp_buf[cnt+j] = RxMessage.Data[2+j];
-						}
-						cnt += 4;
-					}
-					mymemset(&RxMessage.Data[0], 0, 8);
-				}
+				TxMessage.StdId = 0x0601 + index;
+				TxMessage.IDE=CAN_ID_STD;		  // 使用标准帧识符
+				TxMessage.RTR=CAN_RTR_DATA;		  // 消息类型为数据帧，一帧8位	
+				TxMessage.DLC = 8;
+				mymemset(&TxMessage.Data[0], 0, 8);
+				TxMessage.Data[1] = 0x15; //查询位置信息
+				TxMessage.Data[0] = 0x00;	// 0x00:读取数据
+				mbox = CAN_Transmit(CAN1, &TxMessage);  
+				delay_us(CAN_SEND_INT);
+//					while((CAN_TransmitStatus(CAN1, mbox)==CAN_TxStatus_Failed)&&(i<0XFFF))i++;	//等待发送结束
+//					if(i>=0XFFF){
+//						printf("send data request timeout!\r\n");
+//						i=0;
+//						break;
+//					}
+				refresh_pos_data_from_can_recv();
+			}
+			if (init_flag == 1 ){
+				ori_pos_stable_cnt++;
+			}
+			if (ori_pos_stable_cnt>10){
+				//int j;
+				init_flag = 2;
+				ori_pos_stable_cnt = 0;
+				mymemcpy(ori_pos_buf, tcp_rsp_buf, 128);
+									
+//					printf("ori leg data: \r\n");
+//					for(j=0; j<24);j++){
+//						printf("0x%x,",ori_pos_buf[j]);
+//					}printf("\r\n");
+			}
 		}
+
+		//printf("state:%d cmdtype:%d, rspcnt:%d\r\n",state,frame.cmd_type,rsp_time_cnt);
 		lwip_periodic_handle();
 		if (this_loop_has_delayed == 0 ) {
 			delay_ms(SEND_INTERVAL);
@@ -407,8 +399,14 @@ int main(void)
 		t++;
 		if(t==200)
 		{
+			//int j;
 			t=0;
 			LED0=!LED0;
+//			printf("cur leg data: \r\n");
+//			for(j=0; j<24);j++){
+//				printf("0x%x,",tcp_rsp_buf[j]);
+//			}
+//			printf("\r\n");
 		}
 		this_loop_has_delayed = 0;
   }
@@ -419,5 +417,6 @@ int main(void)
 	mymemset(tcppcbnew,0,sizeof(struct tcp_pcb));
 	mymemset(tcppcbconn,0,sizeof(struct tcp_pcb)); 
 	myfree(SRAMIN,can_recv_buf); 
-	myfree(SRAMIN,tcp_rsp_buf); 
+	myfree(SRAMIN,tcp_rsp_buf);
+	myfree(SRAMIN,ori_pos_buf); 
 } 

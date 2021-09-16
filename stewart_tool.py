@@ -260,7 +260,7 @@ class MainProgram(QWidget):
 class ThreadRefreshData(QThread):
     def __init__(self, pc, ui):
         super().__init__()
-        self.delay_ = 1
+        self.delay_ = 0.1
         self.trigger_stop_ = False
         self.is_finished_ = True
         self.pc_ = pc
@@ -269,6 +269,7 @@ class ThreadRefreshData(QThread):
 
     def run(self):
         self.is_finished_ = False
+        time.sleep(3)
         while self.is_finished_ != True:
             leglens = self.pc_.send_data_request()
 

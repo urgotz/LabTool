@@ -16,12 +16,13 @@ class ProtoConvt():
 ##                                    int('0xfffd4ff0',16),
 ##                                    int('0xffffbbcc',16),
 ##                                    int('0xfffe7d04',16)]
-		self.leglen_ori_ = [int('0xfffaa7aa',16),
-                                    int('0xfffd12b9',16),
-                                    int('0xfffbd4f7',16),
-                                    int('0xfffaa6bb',16),
-                                    int('0xfffd1267',16),
-                                    int('0xfffbd3d1',16)]
+		self.leglen_ori_ = [int('0xfffba935',16),
+							int('0xfffd8f28',16),
+							int('0xfffbf44a',16),
+							int('0xfffc066d',16),
+							int('0xfff93806',16),
+							int('0xfffaa244',16)]
+		self.origin_len_inited = False
 		print(self.leglen_ori_)
 
 	def init_protocol(self):
@@ -32,6 +33,9 @@ class ProtoConvt():
 
 	# 单位：mm和°
 	def send_location(self, x, y, z, roll, pitch, yaw, vel = 1500):
+		
+		self.send_ori_data_request()
+
 		print('send location:\nx:%f\ty:%f\tz:%f\troll:%f\tpitch:%f\tyaw:%f'%(x,y,z,roll,pitch, yaw) )
 
 		legs_extention = self.sm_.get_inv_solution(x, y, z, roll/180*3.14, pitch/180*3.14, yaw/180*3.14)
@@ -80,6 +84,7 @@ class ProtoConvt():
 		# print(data)
 
 	def send_func_params(self, params, time, z0):
+		self.send_ori_data_request()
 		data = bytes()
 		data += struct.pack("<B", 0x02)  # send continous motion cmd
 		for i in range(6):
@@ -100,27 +105,52 @@ class ProtoConvt():
 		data = bytes()
 		data += struct.pack("<B", 0x04) # send reset comand 
 		self.s_.send(data)
+		self.origin_len_inited = False
 
 	def send_data_request(self):
 		data = bytes()
 		data += struct.pack("<B", 0x05) # send reset comand 
 		self.s_.send(data)
-		recvdata = self.s_.recv(1024)
-		print(recvdata.hex('-'), len(recvdata), type(recvdata))
-		leglens = list()
-		legoffset = [0, 469762047,3841900261,3841822889,3841981525,402570687]
-		for i in range(6):
-			print(bytearray(recvdata[4*i:4*i+4]))
-			leglens.append( struct.unpack('<I', bytearray(recvdata[4*i:4*i+4]))[0] )
-			print(leglens[i])
-			leglens[i] -= self.leglen_ori_[i]
-			print(leglens[i])
-			if leglens[i] < 0:
-                                leglens[i] += legoffset[i]
-			print(leglens[i])
-			leglens[i] = leglens[i] / self.pul_per_cycle_ * self.lead_
+		recvdata = bytes()
+		try:
+			recvdata = self.s_.recv(1024)
+		except Exception as e:
+			print('error!')
+			traceback.print_exc()
+		finally:
+			print(recvdata.hex('-'), len(recvdata), type(recvdata))
+			if len(recvdata) != 24:
+				print('recv data wrong! len:',len(recvdata))
+				return [0,0,0,0,0,0]
+			leglens = list()
+			# legoffset = [0, 469762047,3841900261,3841822889,3841981525,402570687]
+			for i in range(6):
+				
+				leglens.append( struct.unpack('<I', bytearray(recvdata[4*i:4*i+4]))[0] )
+				print('leg[%d],%s,%s'%(i,bytearray(recvdata[4*i:4*i+4]),leglens[i]))
+				print('leg_ori[%d],%d'%(i,self.leglen_ori_[i]))
+				# print(leglens[i])
+				leglens[i] -= self.leglen_ori_[i]
+				# print(leglens[i])
+				if leglens[i] < 0:
+					leglens[i] += int('0xffffffff',16)
+				print(leglens[i])
+				leglens[i] = leglens[i] / self.pul_per_cycle_ * self.lead_
 		
 		return leglens
+
+	def send_ori_data_request(self):
+		if self.origin_len_inited == False:
+			data = bytes()
+			data += struct.pack("<B", 0x06) # send reset comand 
+			self.s_.send(data)
+			recvdata = self.s_.recv(1024)
+			print('ori leg len',recvdata.hex('-'), len(recvdata), type(recvdata))
+
+			for i in range(6):
+				self.leglen_ori_[i] = struct.unpack('<I', bytearray(recvdata[4*i:4*i+4]))[0] 
+				print('leglen_origin:' , self.leglen_ori_[i])
+		self.origin_len_inited = True
 
 if __name__ == '__main__':
 	pc = ProtoConvt()
