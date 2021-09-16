@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(794, 386)
+        MainWindow.resize(794, 393)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.MainTabWidget = QtWidgets.QTabWidget(self.centralwidget)
@@ -559,6 +559,9 @@ class Ui_MainWindow(object):
         self.label_34.setAlignment(QtCore.Qt.AlignCenter)
         self.label_34.setObjectName("label_34")
         self.gridLayout.addWidget(self.label_34, 0, 4, 1, 1)
+        self.save_data = QtWidgets.QCheckBox(self.gridLayoutWidget)
+        self.save_data.setObjectName("save_data")
+        self.gridLayout.addWidget(self.save_data, 0, 0, 1, 1)
         MainWindow.setCentralWidget(self.centralwidget)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
@@ -636,3 +639,4 @@ class Ui_MainWindow(object):
         self.label_32.setText(_translate("MainWindow", "支腿 2"))
         self.label_33.setText(_translate("MainWindow", "支腿 3"))
         self.label_34.setText(_translate("MainWindow", "支腿 4"))
+        self.save_data.setText(_translate("MainWindow", "实时存储"))

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>794</width>
-    <height>386</height>
+    <height>393</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -1169,6 +1169,13 @@
        </property>
        <property name="alignment">
         <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="0">
+      <widget class="QCheckBox" name="save_data">
+       <property name="text">
+        <string>实时存储</string>
        </property>
       </widget>
      </item>

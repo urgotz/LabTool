@@ -15,7 +15,8 @@ import math
 import time
 
 from protocol_convert import *
-
+import csv
+import datetime
 MIN_ANGLE = -30.0
 MAX_ANGLE = 30.0
 MIN_DISP = -100.0
@@ -64,7 +65,7 @@ class MainProgram(QWidget):
         
         self.send_cont_motion_thrd = None
         self.req_data_thrd = None
-
+        self.path = 'test'
         self.pc = ProtoConvt()
         if self.pc.init_protocol() != 0:
             QMessageBox.critical(self, '错误', '网络连接失败！请检查硬件或IP配置')
@@ -110,7 +111,28 @@ class MainProgram(QWidget):
         self.ui.pushButton_continuous_motion.clicked.connect(self.btn_continuous_motion_clicked)
         self.ui.pushButton_cont_motion_stop.clicked.connect(self.btn_cont_motion_stop_clicked)
         self.ui.pushButton_reset.clicked.connect(self.btn_reset_clicked)
+        self.ui.save_data.clicked.connect(self.save_data_clicked)
 
+    def save_data_clicked(self):
+        if self.ui.save_data.isChecked():
+
+            filename = str( datetime.datetime.now() )
+            self.path = 'savedata' + ''.join(e for e in filename if e.isalnum()) +'.csv'
+            with open(self.path,'w') as f:
+                csv_write = csv.writer(f)
+                csv_head = ["No.","leg1","leg2","leg3","leg4","leg5","leg6"]
+                csv_write.writerow(csv_head)
+            self.req_data_thrd.start_get_data()
+
+        else:
+            with open(self.path,'a+') as f:
+                csv_write = csv.writer(f)
+                i = 0
+                for row in  self.req_data_thrd.get_data():
+                    row.insert(0, i)
+                    i += 1
+                    csv_write.writerow(row)
+                self.req_data_thrd.finish_get_data()
 
     def btn_reset_clicked(self):
         # move platform to middle position
@@ -265,14 +287,16 @@ class ThreadRefreshData(QThread):
         self.is_finished_ = True
         self.pc_ = pc
         self.ui_ = ui
-
+        self.legs_data = list()
+        self.is_getting_data = False
 
     def run(self):
         self.is_finished_ = False
         time.sleep(3)
         while self.is_finished_ != True:
             leglens = self.pc_.send_data_request()
-
+            if self.is_getting_data == True:
+                self.legs_data.append(leglens)
             print(leglens)
             self.ui_.leglen_1.setText(str(round(leglens[0])))
             self.ui_.leglen_2.setText(str(round(leglens[1])))
@@ -285,6 +309,16 @@ class ThreadRefreshData(QThread):
 
     def stop(self):
         self.is_finished_ = True
+
+    def get_data(self):
+        return self.legs_data
+
+    def start_get_data(self):
+        self.is_getting_data = True
+
+    def finish_get_data(self):
+        self.legs_data = list()
+        self.is_getting_data = False
 
 class ThreadSendContinuousMotion(QThread):
     signal = pyqtSignal(str)
